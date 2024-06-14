@@ -1,3 +1,3 @@
 # Team 2 Art Gamers
  
-Hasan Bey
+Hasan B
