@@ -1,4 +1,3 @@
-#test6.25.2024Github
 import pygame
 import random
 import math
@@ -43,6 +42,21 @@ clock = pygame.time.Clock()
 
 background = pygame.image.load(TRACK_FILENAME)
 
+class Stars():
+    def __init__(self, screenwidth, screenheight):
+        self.x=random.randint(0,screenwidth)
+        self.y=random.randint(0,screenheight)
+        self.speed=random.uniform(1,3)
+
+    def update(self):
+        self.y+=self.speed
+        if self.y > WINDOW_HEIGHT:
+            self.y=0
+            self.x=random.randint(0, WINDOW_WIDTH)
+
+    def draw(self, surface):
+        pygame.draw.circle(surface,(255,255,255), (self.x,self.y), 5)
+    #add star image via pygame.draw.image
 
 class Track():
     def __init__(self):
@@ -104,8 +118,7 @@ class Car(pygame.sprite.Sprite):
                 newCoords = natToGlobal(track1, self.seg, self.ksi, self.lat)
                 self.image = pygame.transform.rotate(self.imageInit, -newCoords[2] * 180 / math.pi) # Orient the car according to the local orientation of the track
                 # self.rect = self.image.get_rect()
-                self.rect.x = newCoords[0]
-                self.rect.y = newCoords[1]
+                self.rect.center = (newCoords[0], newCoords[1])
                 distance = 0
             else:  # If the car is now in the next segment
                 distance -= track1.segLen[self.seg] * (1 - self.ksi)
@@ -144,6 +157,10 @@ car1 = Car(CAR_FILENAME)
 car_group.add(car1)
 all_sprites.add(car1)
 
+# number_stars
+number_stars = 100
+stars = [Stars(WINDOW_WIDTH, WINDOW_HEIGHT) for _ in range(number_stars)]
+
 # Main game loop
 running = True
 while running:
@@ -151,6 +168,11 @@ while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
+
+    # draw stars
+    for star in stars:
+        star.update()
+        star.draw(window)
 
     # Display information about car position
     car_info = display_font.render('Lap: ' + str(car1.lap) + ', Speed: ' + str(car1.speed) + 'px/frame, Segment: ' + str(car1.seg) + ', ksi: ' + str(round(car1.ksi,2)), True, YELLOW)
@@ -163,5 +185,7 @@ while running:
     all_sprites.draw(window)
     pygame.display.update()
     clock.tick(FPS)
+
+
 
 pygame.quit()
