@@ -1,191 +1,161 @@
-import pygame
+from constants import *
+from objects import *
 import random
-import math
-from PIL import Image  # Used to get width and height of the window
-
-# Constants
-FPS = 30  # Frame rate of the game (frames per second)
-AVE_CAR_SPEED = 6  # Average car speed (px/frame)
-YELLOW = (255, 255, 0)
-
-# Car definition
-CAR_FILENAME = 'Circle_red.png'
-
-# Track definition
-TRACK_FILENAME = 'Track01.png'
-TRACK_IMG = Image.open(TRACK_FILENAME)
-WINDOW_WIDTH = TRACK_IMG.width  # 1280
-WINDOW_HEIGHT = TRACK_IMG.height  # 720
-TRACK_SEG_TYPES = [1, 2, 1, 2]  # Segment types: 1 = straight lines, 2 = arc (1st segment shall be a straight line)
-TRACK_TRANS_POINTS = [
-    [350.0, 200.0, 75.0],
-    [830.0, 200.0, 125.0],
-    [776.6, 541.7, 125.0],
-    [319.5, 395.2, 75.0]
-]  # Track transition points: (x, y) coordinates, and track width
-TRACK_NSEG = len(TRACK_TRANS_POINTS)  # Number of segments - 1
-TRACK_ARC_DATA = [
-    [0.0, 0.0, 0.0],
-    [830.0, 375.0, 175.0],
-    [0.0, 0.0, 0.0],
-    [350.0, 300.0, 100.0]
-]  # Center points and radius of curvature for arc segments: (x, y, R)
-TRACK_ANGLES = [0.000, 0.000, -2.831, -2.831]  # Start angles for each segment (rad)
-TRACK_ARC_ORIENT = [0, 1, 0, 1]  # Orientation of arc segments: +1 if CCW, -1 if CW
-TRACK_KSI = 0.5  # ksi at start/finish line (on first segment, assumed straight, and not near the very end of the straight to help with the lap counter)
 
 # Initialize Pygame
 pygame.init()
 window = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
-display_font = pygame.font.SysFont('times new roman', 20)
+display_font_1 = pygame.font.SysFont('times new roman', 12)
+display_font_2 = pygame.font.SysFont('times new roman', 75, bold = True)
+display_font_3 = pygame.font.SysFont('times new roman', 50, bold = True)
+display_font_4 = pygame.font.SysFont('times new roman', 20, bold = True)
 clock = pygame.time.Clock()
 
 background = pygame.image.load(TRACK_FILENAME)
 
-class Stars():
-    def __init__(self, screenwidth, screenheight):
-        self.x=random.randint(0,screenwidth)
-        self.y=random.randint(0,screenheight)
-        self.speed=random.uniform(1,3)
+players = []  # List of all players
+for playerNum in range(2):
+    vessel = Vessel(VESSEL_FILENAMES[playerNum], playerNum, [WINDOW_WIDTH * ((1 - playerNum) * VESSEL_PARAMS[0] + playerNum * (1 - VESSEL_PARAMS[0])), WINDOW_HEIGHT * VESSEL_PARAMS[1]])
+    player = Player(playerNum, pygame.sprite.Group(), vessel)
+    players.append(player)
 
-    def update(self):
-        self.y+=self.speed
-        if self.y > WINDOW_HEIGHT:
-            self.y=0
-            self.x=random.randint(0, WINDOW_WIDTH)
-
-    def draw(self, surface):
-        pygame.draw.circle(surface,(255,255,255), (self.x,self.y), 5)
-    #add star image via pygame.draw.image
-
-class Track():
-    def __init__(self):
-        self.segTypes = []
-        self.transPoints = [[]]  # Track transition points: (x, y) coordinates, and track width
-        self.nSeg = 0  # Number of segments
-        self.arcData = [[]]  # Center points and radius of curvature for arc segments: (x, y, R)
-        self.angles = []  # Start angles for each segment (rad)
-        self.arcOrient = []  # Orientation of arc segments: +1 if CCW, -1 if CW
-        self.startKsi = 0.0  # ksi at start/finish line (on first segment, assumed straight)
-        self.segLen = []  # Length of each segment
-
-    def __init__(self, segTypes, transPoints, arcData, angles, arcOrient, startKsi):
-        self.segTypes = segTypes  # Segment types: 1 = straight lines, 2 = arc
-        self.transPoints = transPoints  # Track transition points: (x, y) coordinates, and track width
-        self.nSeg = len(transPoints)  # Number of segments
-        self.arcData = arcData  # Center points and radius of curvature for arc segments: (x, y, R)
-        self.angles = angles  # Start angles for each segment (rad)
-        self.arcOrient = arcOrient  # Orientation of arc segments: +1 if CCW, -1 if CW
-        self.startKsi = startKsi  # ksi at start/finish line (on first segment, assumed straight)
-        self.segLen = []  # Length of each segment
-        for seg in range(self.nSeg):
-            segPlusOne = (seg + 1) % self.nSeg
-            if self.segTypes[seg] == 1:  # If the segment is a straight line
-                self.segLen.append(math.sqrt((self.transPoints[segPlusOne][0] - self.transPoints[seg][0]) ** 2 + (self.transPoints[segPlusOne][1] - self.transPoints[seg][1]) ** 2))
-            else:  # If the segment is an arc
-                dTheta = self.angles[segPlusOne] - self.angles[seg]
-                if (self.arcOrient[seg] == 1 and dTheta < 0):  # If the segment is CCW and the end angle is smaller than the start angle
-                    dTheta += 2 * math.pi
-                if (self.arcOrient[seg] == -1 and dTheta > 0):  # If the segment is CW and the end angle is larger than the start angle
-                    dTheta -= 2 * math.pi
-                self.segLen.append(self.arcData[seg][2] * abs(dTheta))
+# Create vehicles for each player and add to groups
+playerNum = random.randint(0, 1)  # Randomly picks player in first place on starting grid
+ksi = track1.startKsi - TRACK_STARTING_GRID[1]
+if TRACK_STARTING_GRID[0] == 1:  # If only one row of vehicles
+    lat = 0
+else:
+    lat = -VEHICLE_LAT_PARAMS[0]
+i_lat = 1  # Index for lateral position
+speedUpdate = [1, 0.00, VEHICLE_SPEED_PARAMS[0], VEHICLE_SPEED_PARAMS[5], 0] # Makes the vehicle accelerate to target speed from 0 speed
+for i in range(2 * N_VEHICLES):
+    vehicle = Vehicle(VEHICLE_FILENAMES[playerNum], playerNum, ksi, lat, speedUpdate)
+    players[playerNum].vehicleGroup.add(vehicle)  # Add vehicle to vehicle group of appropriate player
+    allVehicleSprites.add(vehicle)  # Add vehicle to group of all vehicle sprites
+    ksi -= TRACK_STARTING_GRID[2]
+    if TRACK_STARTING_GRID[0] == 1:  # If only one row of vehicles
+        lat = 0
+    else:
+        i_lat = i_lat % TRACK_STARTING_GRID[0] + 1
+        lat = -VEHICLE_LAT_PARAMS[0] + 2 * (i_lat - 1)/(TRACK_STARTING_GRID[0] - 1) * VEHICLE_LAT_PARAMS[0]
+    playerNum = 1 - playerNum  # Switch player
 
 
-class Car(pygame.sprite.Sprite):
-    def __init__(self, carFilename):
-        super().__init__()
-        self.imageInit = pygame.image.load(carFilename)
-        self.image = pygame.transform.rotate(self.imageInit, track1.angles[0]*180/math.pi)
-        self.rect = self.image.get_rect()
+# Add vessels to allVehicleSprites after vehicles have already been added, so they appear on top
+for player in players:
+    allVehicleSprites.add(player.vessel)  # Add vessel to group of all vehicle sprites
 
-        self.seg = 0  # Starts at segment 0
-        self.ksi = track1.startKsi  # Car positioned at the start/finish line
-        self.lat = 0  # Car lateral position is initially 0.0 along the track width
-        carCoords = natToGlobal(track1, self.seg, self.ksi, self.lat)
-        self.rect.center = (carCoords[0], carCoords[1])  # Initial position of the car
-        self.dir = carCoords[2]  # Initial direction of the car (rad)
-        self.lap = 1  # Lap number
-        self.speed = AVE_CAR_SPEED  # Car speed
+# Define stars
+stars = []
+for i in range(N_STARS):
+    stars.append(Star())
 
-    def update(self):
-        distance = self.speed  # Distance by which the car needs to move
-        while distance > 0:
-            newKsi = self.ksi + distance / track1.segLen[self.seg]
-            if newKsi < 1:  # If the car is still in the same segment
-                if (self.seg == 0 and self.ksi < track1.startKsi and newKsi >= track1.startKsi):  # Update lap number
-                    self.lap += 1
-                self.ksi = newKsi
-                newCoords = natToGlobal(track1, self.seg, self.ksi, self.lat)
-                self.image = pygame.transform.rotate(self.imageInit, -newCoords[2] * 180 / math.pi) # Orient the car according to the local orientation of the track
-                # self.rect = self.image.get_rect()
-                self.rect.center = (newCoords[0], newCoords[1])
-                distance = 0
-            else:  # If the car is now in the next segment
-                distance -= track1.segLen[self.seg] * (1 - self.ksi)
-                self.seg = (self.seg + 1) % track1.nSeg
-                self.ksi = 0.0
-
-
-def natToGlobal(track, seg, ksi, lat):  # Calculates global coords (x, y, theta) from natural coords (seg, ksi, lat)
-    segPlusOne = (seg + 1) % track.nSeg
-    if track.segTypes[seg] == 1:  # If the segment is a straight line
-        x = track.transPoints[seg][0] + ksi * (track.transPoints[segPlusOne][0] - track.transPoints[seg][0])
-        y = track.transPoints[seg][1] + ksi * (track.transPoints[segPlusOne][1] - track.transPoints[seg][1])
-        theta = track.angles[seg]
-    else:  # If the segment is an arc
-        startAngle = track.angles[seg]
-        endAngle = track.angles[segPlusOne]
-        if (track.arcOrient[seg] == 1 and endAngle < startAngle):  # If the segment is CCW and the end angle is smaller than the start angle
-            endAngle += 2 * math.pi
-        if (track.arcOrient[seg] == -1 and endAngle > startAngle):  # If the segment is CW and the end angle is larger than the start angle
-            endAngle -= 2 * math.pi
-
-        theta = startAngle + ksi * (endAngle - startAngle)
-        x = track.arcData[seg][0] + track.arcData[seg][2] * math.cos(theta - math.pi/2)
-        y = track.arcData[seg][1] + track.arcData[seg][2] * math.sin(theta - math.pi/2)
-    return [x, y, theta]
-
-# Create groups
-car_group = pygame.sprite.Group()
-all_sprites = pygame.sprite.Group()
-
-# Create the track
-track1 = Track(TRACK_SEG_TYPES, TRACK_TRANS_POINTS, TRACK_ARC_DATA, TRACK_ANGLES, TRACK_ARC_ORIENT, TRACK_KSI)
-
-# Create cars for each player and add to groups
-car1 = Car(CAR_FILENAME)
-car_group.add(car1)
-all_sprites.add(car1)
-
-# number_stars
-number_stars = 100
-stars = [Stars(WINDOW_WIDTH, WINDOW_HEIGHT) for _ in range(number_stars)]
-
-# Main game loop
+# Main loop
+phase = 1  # 1:  3... 2... 1... countdown phase; 2: game phase; 3: post-game phase
 running = True
+
+progress_bar1 = pygame.Surface(PROGRESS_BAR_SIZE)
+progress_bar1.fill(GRAY)
+progress_bar_im1 = pygame.Surface((1, PROGRESS_BAR_SIZE[1]))
+progress_bar_im1.fill(PLAYER1_COL)
+progress_bar_pos1 = pygame.Vector2()
+progress_bar2 = pygame.Surface(PROGRESS_BAR_SIZE)
+progress_bar2.fill(GRAY)
+progress_bar_im2 = pygame.Surface((1, PROGRESS_BAR_SIZE[1]))
+progress_bar_im2.fill(PLAYER2_COL)
+progress_bar_pos2 = pygame.Vector2()
+
+startTime = time.time()
+currentTime = time.time()
 while running:
+    pygame.draw.rect(window, BLACK, pygame.Rect(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT))
     window.blit(background, background.get_rect())
+
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
 
-    # draw stars
+    # Update and draw stars
     for star in stars:
         star.update()
         star.draw(window)
 
-    # Display information about car position
-    car_info = display_font.render('Lap: ' + str(car1.lap) + ', Speed: ' + str(car1.speed) + 'px/frame, Segment: ' + str(car1.seg) + ', ksi: ' + str(round(car1.ksi,2)), True, YELLOW)
-    window.blit(car_info, (2, 2))
+    if phase == 1:  # 3... 2... 1... countdown phase
+        # Display 3... 2... 1... countdown
+        countdown = display_font_2.render(str(int(COUNTDOWN + startTime - currentTime + 1)) + '...', True, WHITE)
+        text_rect = countdown.get_rect(center=(WINDOW_WIDTH / 2, 0.35 * WINDOW_HEIGHT))
+        window.blit(countdown, text_rect)
+    elif phase == 2:  # Race phase
+        pygame.draw.rect(window, BLACK, pygame.Rect(0, 0, WINDOW_WIDTH, TOP_BANNER_HEIGHT))
+        # Display race timer
+        raceTimer = display_font_3.render(str(int(RACE_DURATION + startTime - currentTime)), True, YELLOW)
+        text_rect = raceTimer.get_rect(center=(WINDOW_WIDTH / 2, 30))
+        window.blit(raceTimer, text_rect)
+    elif phase == 3:  # Post-game phase
+        pygame.draw.rect(window, BLACK, pygame.Rect(0, 0, WINDOW_WIDTH, TOP_BANNER_HEIGHT))
+        raceTimer = display_font_3.render('0', True, YELLOW)
+        text_rect = raceTimer.get_rect(center=(WINDOW_WIDTH / 2, 30))
+        window.blit(raceTimer, text_rect)
+        winner = display_font_2.render('Player ' + str(playerNum + 1) + ' wins!', True, YELLOW)
+        text_rect = winner.get_rect(center=(WINDOW_WIDTH / 2, 0.35 * WINDOW_HEIGHT))
+        window.blit(winner, text_rect)
 
-    # Update all sprites
-    all_sprites.update()
+    if phase == 2:
+        # Update all projectile sprites
+        allVehicleSprites.update()
+
+    if phase >= 2:
+        # Update all vehicle sprites
+        allProjectileSprites.update()
+
+        # Update score of all players
+        for player in players:
+            player.updateScore()
+
+        # Display progress bar for each player
+        progress_bar1.blit(progress_bar_im1, progress_bar_pos1)
+        window.blit(progress_bar1, (5, 5))
+        progress_bar_pos1.x = players[0].score / track1.maxRaceLength * PROGRESS_BAR_SIZE[0]
+        lap = ' lap' if players[0].score <= 1.0 else ' laps'
+        player1Progress = 'Player ' + str(1) + ': ' + str("{:.2f}".format(players[0].score)) + lap
+        window.blit(display_font_4.render(player1Progress, True, PLAYER1_COL), (5, 15))
+
+        progress_bar2.blit(progress_bar_im2, progress_bar_pos2)
+        window.blit(progress_bar2, (WINDOW_WIDTH - PROGRESS_BAR_SIZE[0] - 5, 5))
+        progress_bar_pos2.x = players[1].score / track1.maxRaceLength * PROGRESS_BAR_SIZE[0]
+        lap = ' lap' if players[1].score <= 1.0 else ' laps'
+        player2Progress = 'Player ' + str(2) + ': ' + str("{:.2f}".format(players[1].score)) + lap
+        window.blit(display_font_4.render(player2Progress, True, PLAYER2_COL), (WINDOW_WIDTH - PROGRESS_BAR_SIZE[0] - 5, 15))
+
+        # Display information about position of vehicles from each player
+        if DISPLAY_DEBUG == 1:
+            y_displ = 2
+            for player in players:
+                vehicleGroup = player.vehicleGroup
+                for vehicle in vehicleGroup:
+                    vehicleInfo = 'Player ' + str(player.playerNum + 1) + ', Lap: ' + str(vehicle.lap) + ', Speed: ' + str(round(vehicle.speed, 2)) + 'px/frame, Segment: ' + str(vehicle.seg) + ', ksi: ' + str(round(vehicle.ksi, 2)) + ', lat: ' + str(round(vehicle.lat, 2)) + ', angle: ' + str(round(-vehicle.dir * 180 / math.pi, 1)) + 'deg, Distance: ' + str(round(vehicle.distance, 2)) + ', Score: ' + str(round(player.score, 2))
+                    window.blit(display_font_1.render(vehicleInfo, True, YELLOW), (2, y_displ))
+                    y_displ += 14
 
     # Draw sprites and update display
-    all_sprites.draw(window)
+    allProjectileSprites.draw(window)
+    allVehicleSprites.draw(window)
     pygame.display.update()
     clock.tick(FPS)
+    pygame.display.flip()
 
+    # Update current time
+    currentTime = time.time()
 
+    # Update phase
+    if phase == 1 and COUNTDOWN + startTime - currentTime <= 0.0:
+        phase = 2
+        startTime = time.time() - EPSILON
+    elif phase == 2 and RACE_DURATION + startTime - currentTime <= 1.0:  # Exit loop when countdown is over
+        phase = 3
+        for player in players:  # Force all vehicles to slow down and stop
+            for vehicle in player.vehicleGroup:
+                vehicle.speedUpdate = [0, vehicle.speed, 0.0, VEHICLE_SPEED_PARAMS[5], 1]
+        playerNum = 0 if players[0].score > players[1].score else 1  # Determine the winning player
 
 pygame.quit()
