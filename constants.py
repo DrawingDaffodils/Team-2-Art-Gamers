@@ -1,5 +1,6 @@
 import pygame
-from PIL import Image  # Used to get width and height of the window
+from PIL import Image
+import socketio  # Used to get width and height of the window
 
 # Colors
 WHITE = (255, 255, 255)
@@ -166,3 +167,6 @@ elif TRACK_NUM == 2:  # Track #2
 TRACK_IMG = Image.open(TRACK_FILENAME)
 WINDOW_WIDTH = TRACK_IMG.width  # 1280
 WINDOW_HEIGHT = TRACK_IMG.height  # 720
+
+# Create Websocket client
+sio = socketio.SimpleClient(logger=True)

@@ -2,6 +2,9 @@ from constants import *
 from objects import *
 import random
 
+
+sio.connect("http://localhost:8080") # Connects the websocket client to server.py
+
 # Initialize Pygame
 pygame.init()
 window = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))

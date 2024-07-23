@@ -47,9 +47,9 @@ class Track():
 
 
 class Vehicle(pygame.sprite.Sprite):
-    def __init__(self, vehicleFilename, playerNum, ksi, lat, speedUpdate):
+    def __init__(self, vehicleFilename, playerId, ksi, lat, speedUpdate):
         super().__init__()
-        self.playerNum = playerNum
+        self.playerId = playerId
         self.imageInit = pygame.image.load(vehicleFilename).convert_alpha()
         imgSize = self.imageInit.get_size()
         self.imageInit = pygame.transform.scale(self.imageInit, (int(VEHICLE_WIDTH), int(VEHICLE_WIDTH * imgSize[1] / imgSize[0])))
@@ -134,9 +134,9 @@ class Vehicle(pygame.sprite.Sprite):
 
 
 class Vessel(pygame.sprite.Sprite):
-    def __init__(self, vesselFilename, playerNum, initPosition):
+    def __init__(self, vesselFilename, playerId, initPosition):
         super().__init__()
-        self.playerNum = playerNum
+        self.playerId = playerId
         self.dir = math.pi/2  # Direction w.r.t. horizontal (rad)
         self.imageInit = pygame.image.load(vesselFilename).convert_alpha()
         imgSize = self.imageInit.get_size()
@@ -148,24 +148,27 @@ class Vessel(pygame.sprite.Sprite):
     def update(self):
         # Update vessel position
         keys = pygame.key.get_pressed()
-        if keys[VESSEL_KEYS[self.playerNum][0]] and self.rect.y > TOP_BANNER_HEIGHT:
+        if keys[VESSEL_KEYS[self.playerId][0]] and self.rect.y > TOP_BANNER_HEIGHT:
             self.rect.y -= VESSEL_PARAMS[2]  # move up
             self.dir = math.pi/2
-        if keys[VESSEL_KEYS[self.playerNum][1]] and self.rect.y < WINDOW_HEIGHT - self.rect.height:
+            
+        if keys[VESSEL_KEYS[self.playerId][1]] and self.rect.y < WINDOW_HEIGHT - self.rect.height:
             self.rect.y += VESSEL_PARAMS[2]  # move down
             self.dir = -math.pi / 2
-        if keys[VESSEL_KEYS[self.playerNum][2]] and self.rect.x > 0:
+        if keys[VESSEL_KEYS[self.playerId][2]] and self.rect.x > 0:
             self.rect.x -= VESSEL_PARAMS[2]  # move left
             self.dir = math.pi
-        if keys[VESSEL_KEYS[self.playerNum][3]] and self.rect.x < WINDOW_WIDTH - self.rect.width:
+        if keys[VESSEL_KEYS[self.playerId][3]] and self.rect.x < WINDOW_WIDTH - self.rect.width:
             self.rect.x += VESSEL_PARAMS[2]  # move right
             self.dir = 0
 
         # Shoot fruit
-        if keys[VESSEL_KEYS[self.playerNum][4]] and time.time() - self.lastShotTime > FRUIT_PARAMS[2]:
+        if keys[VESSEL_KEYS[self.playerId][4]] and time.time() - self.lastShotTime > FRUIT_PARAMS[2]:
             self.lastShotTime = time.time()
             fruit = Fruit(self.rect.center, self.dir, 0)
             allProjectileSprites.add(fruit)
+        # Sends data to server.py
+        sio.emit('update', { "x": self.rect.x, "y": self.rect.y, "dir": self.dir })
 
 
 class Fruit(pygame.sprite.Sprite):
@@ -194,8 +197,8 @@ class Fruit(pygame.sprite.Sprite):
 
 
 class Player():
-    def __init__(self, playerNum, vehicleGroup, vessel):
-        self.playerNum = playerNum
+    def __init__(self, playerId, vehicleGroup, vessel):
+        self.playerId = playerId
         self.vehicleGroup = vehicleGroup
         self.score = 0.00  # Score (out of 100)
         self.vessel = vessel
