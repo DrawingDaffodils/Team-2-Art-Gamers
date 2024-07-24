@@ -146,29 +146,30 @@ class Vessel(pygame.sprite.Sprite):
         self.lastShotTime = 0  # Time of the last projectile shot
 
     def update(self):
-        # Update vessel position
+        # Listen for movement and send it to websocket server
+        movement = {"y": self.rect.y, "x": self.rect.x, "dir": self.dir }
         keys = pygame.key.get_pressed()
-        if keys[VESSEL_KEYS[self.playerId][0]] and self.rect.y > TOP_BANNER_HEIGHT:
-            self.rect.y -= VESSEL_PARAMS[2]  # move up
-            self.dir = math.pi/2
-            
-        if keys[VESSEL_KEYS[self.playerId][1]] and self.rect.y < WINDOW_HEIGHT - self.rect.height:
-            self.rect.y += VESSEL_PARAMS[2]  # move down
-            self.dir = -math.pi / 2
-        if keys[VESSEL_KEYS[self.playerId][2]] and self.rect.x > 0:
-            self.rect.x -= VESSEL_PARAMS[2]  # move left
-            self.dir = math.pi
-        if keys[VESSEL_KEYS[self.playerId][3]] and self.rect.x < WINDOW_WIDTH - self.rect.width:
-            self.rect.x += VESSEL_PARAMS[2]  # move right
-            self.dir = 0
+        if keys[VESSEL_KEYS[0]] and self.rect.y > TOP_BANNER_HEIGHT:
+            movement['y'] -= VESSEL_PARAMS[2]  # move up
+            movement['dir'] = math.pi/2
+        if keys[VESSEL_KEYS[1]] and self.rect.y < WINDOW_HEIGHT - self.rect.height:
+            movement['y'] += VESSEL_PARAMS[2]  # move down
+            movement['dir'] = -math.pi / 2
+        if keys[VESSEL_KEYS[2]] and self.rect.x > 0:
+            movement['x'] -= VESSEL_PARAMS[2]  # move left
+            movement['dir'] = math.pi
+        if keys[VESSEL_KEYS[3]] and self.rect.x < WINDOW_WIDTH - self.rect.width:
+            movement['x'] += VESSEL_PARAMS[2]  # move right
+            movement['dir'] = 0
 
         # Shoot fruit
-        if keys[VESSEL_KEYS[self.playerId][4]] and time.time() - self.lastShotTime > FRUIT_PARAMS[2]:
+        if keys[VESSEL_KEYS[4]] and time.time() - self.lastShotTime > FRUIT_PARAMS[2]:
             self.lastShotTime = time.time()
             fruit = Fruit(self.rect.center, self.dir, 0)
             allProjectileSprites.add(fruit)
+
         # Sends data to server.py
-        sio.emit('update', { "x": self.rect.x, "y": self.rect.y, "dir": self.dir })
+        sio.emit('update', movement)
 
 
 class Fruit(pygame.sprite.Sprite):
@@ -209,6 +210,7 @@ class Player():
         for vehicle in self.vehicleGroup:
             self.score += vehicle.distance / track1.trackLen
         self.score = self.score / N_VEHICLES
+        sio.emit('update', {"score": self.score})
 
 class Star():
     def __init__(self):

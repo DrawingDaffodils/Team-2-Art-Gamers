@@ -75,10 +75,9 @@ FRUIT_PARAMS = [10, 0.15, 1]
 # 2: 'Left' key
 # 3: 'Right' key
 # 4: 'Shoot' key
-VESSEL_KEYS = [
-    [pygame.K_w, pygame.K_s, pygame.K_a, pygame.K_d, pygame.K_x],
-    [pygame.K_o, pygame.K_l, pygame.K_k, pygame.K_SEMICOLON, pygame.K_PERIOD]
-]
+VESSEL_KEYS = [pygame.K_w, pygame.K_s, pygame.K_a, pygame.K_d, pygame.K_x]
+    # [pygame.K_o, pygame.K_l, pygame.K_k, pygame.K_SEMICOLON, pygame.K_PERIOD]
+
 
 # Track definition
 if TRACK_NUM == 1:  # Track #1
