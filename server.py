@@ -13,17 +13,15 @@ sio.attach(app)
 
 players = {}
 tick_count = 0
-tick_interval = 60  # Number of ticks per second (adjust as needed)
+tick_interval = 24 # Number of ticks per second (adjust as needed)
 
 async def ticker():
     global tick_count
     while True:
         await asyncio.sleep(1 / tick_interval)  # Sleep for the appropriate fraction of a second
         tick_count += 1
-        if tick_count >= tick_interval:
-            tick_count = 0
-            # Send player data to all clients
-            await sio.emit('player_data', players)
+        # Send player data to all clients
+        await sio.emit('player_data', players)
 
 @sio.event
 def connect(sid, environ):
@@ -45,7 +43,7 @@ async def update(sid, data):
   
     # Update player data
     players[sid].update(data)
-    print("message ", players[sid])
+    # print("message ", players[sid])
     
 
 @sio.event
