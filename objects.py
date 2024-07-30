@@ -3,7 +3,7 @@ import random
 import math
 import time
 from constants import * #asterisk allows your to import global variable, classes, and functions forma file.
-
+import uuid
 
 
 class Track():
@@ -134,9 +134,10 @@ class Vehicle(pygame.sprite.Sprite):
 
 
 class Vessel(pygame.sprite.Sprite):
-    def __init__(self, vesselFilename, playerId, initPosition):
+    def __init__(self, vesselFilename, id, initPosition, playerId=''):
         super().__init__()
-        self.playerId = playerId
+        self.id = id # the id of the player this vessel belongs to
+        self.playerId = playerId # The id of the current person playing
         self.dir = math.pi/2  # Direction w.r.t. horizontal (rad)
         self.imageInit = pygame.image.load(vesselFilename).convert_alpha()
         imgSize = self.imageInit.get_size()
@@ -146,35 +147,45 @@ class Vessel(pygame.sprite.Sprite):
         self.lastShotTime = 0  # Time of the last projectile shot
 
     def update(self):
+        if(self.id != self.playerId): # Only update the vessel if it belongs to you
+            return
         # Listen for movement and send it to websocket server
-        movement = {"y": self.rect.y, "x": self.rect.x, "dir": self.dir }
+        actions = {"y": self.rect.y, "x": self.rect.x, "dir": self.dir }
         keys = pygame.key.get_pressed()
         if keys[VESSEL_KEYS[0]] and self.rect.y > TOP_BANNER_HEIGHT:
-            movement['y'] -= VESSEL_PARAMS[2]  # move up
-            movement['dir'] = math.pi/2
+            actions['y'] -= VESSEL_PARAMS[2]  # move up
+            actions['dir'] = math.pi/2
         if keys[VESSEL_KEYS[1]] and self.rect.y < WINDOW_HEIGHT - self.rect.height:
-            movement['y'] += VESSEL_PARAMS[2]  # move down
-            movement['dir'] = -math.pi / 2
+            actions['y'] += VESSEL_PARAMS[2]  # move down
+            actions['dir'] = -math.pi / 2
         if keys[VESSEL_KEYS[2]] and self.rect.x > 0:
-            movement['x'] -= VESSEL_PARAMS[2]  # move left
-            movement['dir'] = math.pi
+            actions['x'] -= VESSEL_PARAMS[2]  # move left
+            actions['dir'] = math.pi
         if keys[VESSEL_KEYS[3]] and self.rect.x < WINDOW_WIDTH - self.rect.width:
-            movement['x'] += VESSEL_PARAMS[2]  # move right
-            movement['dir'] = 0
+            actions['x'] += VESSEL_PARAMS[2]  # move right
+            actions['dir'] = 0
 
         # Shoot fruit
         if keys[VESSEL_KEYS[4]] and time.time() - self.lastShotTime > FRUIT_PARAMS[2]:
             self.lastShotTime = time.time()
-            fruit = Fruit(self.rect.center, self.dir, 0)
-            allProjectileSprites.add(fruit)
+            actions['fruit'] = {
+                'initPosition': self.rect.center, 
+                'initDir': self.dir,
+                'type': 0,
+                'id': uuid.uuid4().hex
+            }
+            # fruit = Fruit(self.rect.center, self.dir, 0)
+            # allProjectileSprites.add(fruit)
 
         # Sends data to server.py
-        sio.emit('update', movement)
+        # if actions != {"y": self.rect.y, "x": self.rect.x, "dir": self.dir }: # Reduces the amount of messages sent to server.py (makes the game faster)
+        sio.emit('update', actions)
 
 
 class Fruit(pygame.sprite.Sprite):
-    def __init__(self, initPosition, initDir, type):
+    def __init__(self, initPosition, initDir, type, id):
         super().__init__()
+        self.id = id
         self.type = type  # Type of fruit
         self.dir = initDir  # Direction in which the fruit is moving
         self.angle = 0  # Orientation of the fruit (rad)
@@ -184,33 +195,49 @@ class Fruit(pygame.sprite.Sprite):
         self.image = pygame.transform.rotate(self.imageInit, self.angle * 180 / math.pi)
         self.rect = self.image.get_rect()
         self.rect.center = initPosition  # Initial position of the fruit
+        self.shotAt = time.time()
 
     def update(self):
+        timeAlive = time.time() - self.shotAt
         # Update fruit position and orientation
-        if -self.rect.width < self.rect.x < WINDOW_WIDTH and TOP_BANNER_HEIGHT < self.rect.y < WINDOW_HEIGHT:
+        if not timeAlive > FRUIT_PARAMS[3] and -self.rect.width < self.rect.x < WINDOW_WIDTH and TOP_BANNER_HEIGHT < self.rect.y < WINDOW_HEIGHT:
             self.angle += FRUIT_PARAMS[1]
             newCoords = [self.rect.centerx + FRUIT_PARAMS[0] * math.cos(self.dir), self.rect.centery - FRUIT_PARAMS[0] * math.sin(self.dir)]
             self.image = pygame.transform.rotate(self.imageInit, -self.angle * 180 / math.pi)
             self.rect = self.image.get_rect()
             self.rect.center = (newCoords[0], newCoords[1])
         else:  # Destroy the fruit if it reaches the edges of the window
+            sio.emit('update', { 'fruit': { "kill": True, "id": self.id } })
             self.kill()
 
 
 class Player():
-    def __init__(self, playerId, vehicleGroup, vessel):
+    def __init__(
+            self, playerId, 
+            vehicleGroup, vessel, 
+            playerNum = 0, color = random.choice(PLAYER_COLS)):
         self.playerId = playerId
         self.vehicleGroup = vehicleGroup
         self.score = 0.00  # Score (out of 100)
         self.vessel = vessel
+        self.playerNum = playerNum
+        self.color = color
 
     # Update the score of a player
     def updateScore(self):
-        self.score = 0.00
+        score = 0.00
         for vehicle in self.vehicleGroup:
-            self.score += vehicle.distance / track1.trackLen
-        self.score = self.score / N_VEHICLES
-        sio.emit('update', {"score": self.score})
+            score += vehicle.distance / track1.trackLen
+        score /=  N_VEHICLES
+        # sio.emit('update', {"score": score})
+
+    def createProgressBar(self):
+        bar = pygame.Surface(PROGRESS_BAR_SIZE)
+        bar.fill(GRAY)
+        bar_im = pygame.Surface((1, PROGRESS_BAR_SIZE[1]))
+        bar_im.fill(self.color)
+        bar_pos = pygame.Vector2()
+        return (bar, bar_im, bar_pos)
 
 class Star():
     def __init__(self):

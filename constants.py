@@ -5,13 +5,14 @@ import socketio  # Used to get width and height of the window
 # Colors
 WHITE = (255, 255, 255)
 GRAY = (100, 100, 100)
-YELLOW = (255, 255, 0)
 BLACK = (0, 0, 0)
+YELLOW = (255, 255, 0)
 GREEN = (0, 255, 0)
 BLUE = (0, 0, 255)
 PINK = (255, 153, 255)
-PLAYER1_COL = (255, 87, 12)  # Used for player 1 progress bar
-PLAYER2_COL = (0, 169, 252)  # Used for player 2 progress bar
+# PLAYER1_COL = (255, 87, 12)  # Used for player 1 progress bar
+# PLAYER2_COL = (0, 169, 252)  # Used for player 2 progress bar
+PLAYER_COLS = [BLUE, YELLOW, GREEN, PINK]
 
 # Constants
 TRACK_NUM = 2  # 1 or 2
@@ -68,7 +69,8 @@ FRUIT_FILENAMES = ['Fruit01.png']
 # 0: Fruit linear speed (px/frame)
 # 1: Fruit rotation speed (rad/frame)
 # 2: Latency allowed between 2 shots (s)
-FRUIT_PARAMS = [10, 0.15, 1]
+# 3: Maximum life time for fruit (s)
+FRUIT_PARAMS = [10, 0.15, 0.75, 1.75]
 
 # 0: 'Up' key
 # 1: 'Down' key
@@ -168,4 +170,4 @@ WINDOW_WIDTH = TRACK_IMG.width  # 1280
 WINDOW_HEIGHT = TRACK_IMG.height  # 720
 
 # Create Websocket client
-sio = socketio.SimpleClient(logger=True)
+sio = socketio.SimpleClient()
