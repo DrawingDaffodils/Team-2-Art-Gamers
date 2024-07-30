@@ -168,7 +168,7 @@ elif TRACK_NUM == 2:  # Track #2
 TRACK_IMG = Image.open(TRACK_FILENAME)
 WINDOW_WIDTH = TRACK_IMG.width  # 1280
 WINDOW_HEIGHT = TRACK_IMG.height  # 720
-SOCKETIO_URL = "http://localhost:8080"
+SOCKETIO_URL = "http://bsredu.space:8080"
 
 # Create Websocket client
 sio = socketio.Client()
