@@ -147,6 +147,7 @@ class Vessel(pygame.sprite.Sprite):
         self.lastShotTime = 0  # Time of the last projectile shot
 
     def update(self):
+        print(self.id, self.playerId)
         if(self.id != self.playerId): # Only update the vessel if it belongs to you
             return
         # Listen for movement and send it to websocket server

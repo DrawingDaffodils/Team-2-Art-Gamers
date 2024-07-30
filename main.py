@@ -4,9 +4,10 @@ import time
 import random
 
 
-sio.connect("http://localhost:8080") # Connects the websocket client to server.py
 
-time.sleep(2)
+
+
+
 
 # Initialize Pygame
 pygame.init()
@@ -22,12 +23,13 @@ background = pygame.image.load(TRACK_FILENAME)
 players: dict[str, Player] = {}  # List of all players
 
 playerNum = 0
-playerId = sio.client.get_sid()
+playerId = ''
 phase = 1  # 1:  3... 2... 1... waiting for player phase; 2: game phase; 3: post-game phase
-    
+
+
 
 # Runs on every tick from server.py
-@sio.client.on('player_data')
+@sio.on('player_data')
 def player_data(data): 
     create_players(data)
         
@@ -123,14 +125,14 @@ startTime = None
 currentTime = time.time()
 
 
-@sio.client.on('start')
+@sio.on('start')
 def start(data):
     print('Recieved start')
     global startTime, phase, players, playerId
     allProjectileSprites.empty()
     allVehicleSprites.empty()
     players = {}
-    playerId = sio.sid
+    playerId = sio.get_sid()
     create_stars()
 
     players_data = data['players']
@@ -144,7 +146,7 @@ def start(data):
 
 
 
-
+sio.connect(SOCKETIO_URL) # Connects the websocket client to server.py
 while running:
     pygame.draw.rect(window, BLACK, pygame.Rect(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT))
     window.blit(background, background.get_rect())
@@ -163,6 +165,7 @@ while running:
         text_rect = countdown.get_rect(center=(WINDOW_WIDTH / 2, 0.35 * WINDOW_HEIGHT))
         # print('Waiting for more players...')
         window.blit(countdown, text_rect)
+        
     elif phase == 2:  # Race phase
         pygame.draw.rect(window, BLACK, pygame.Rect(0, 0, WINDOW_WIDTH, TOP_BANNER_HEIGHT))
         # Display race timer
