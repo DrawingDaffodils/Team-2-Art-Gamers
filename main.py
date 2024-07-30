@@ -188,7 +188,7 @@ while running:
         raceTimer = display_font_3.render('0', True, YELLOW)
         text_rect = raceTimer.get_rect(center=(WINDOW_WIDTH / 2, 30))
         window.blit(raceTimer, text_rect)
-        winnerText = display_font_2.render('Player ' + winner_player.playerNum + ' wins!', True, player.color)
+        winnerText = display_font_2.render('Player ' + str(winner_player.playerNum) + ' wins!', True, player.color)
         text_rect = winnerText.get_rect(center=(WINDOW_WIDTH / 2, 0.35 * WINDOW_HEIGHT))
         window.blit(winnerText, text_rect)
 

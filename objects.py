@@ -180,8 +180,8 @@ class Vessel(pygame.sprite.Sprite):
 
         # Sends data to server.py
         # if actions != {"y": self.rect.y, "x": self.rect.x, "dir": self.dir }: # Reduces the amount of messages sent to server.py (makes the game faster)
-
-        sio.emit('update', actions)
+        if sio.connected: # Only send messages if the user is connected
+            sio.emit('update', actions)
 
 
 class Fruit(pygame.sprite.Sprite):
@@ -231,7 +231,8 @@ class Player():
         for vehicle in self.vehicleGroup:
             score += vehicle.distance / track1.trackLen
         score /=  N_VEHICLES
-        # sio.emit('update', {"score": score})
+        if sio.connected:
+            sio.emit('update', {"score": score})
 
     def createProgressBar(self):
         bar = pygame.Surface(PROGRESS_BAR_SIZE)
