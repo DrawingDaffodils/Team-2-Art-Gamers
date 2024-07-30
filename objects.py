@@ -180,6 +180,7 @@ class Vessel(pygame.sprite.Sprite):
 
         # Sends data to server.py
         # if actions != {"y": self.rect.y, "x": self.rect.x, "dir": self.dir }: # Reduces the amount of messages sent to server.py (makes the game faster)
+
         sio.emit('update', actions)
 
 

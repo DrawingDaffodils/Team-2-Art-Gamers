@@ -23,7 +23,7 @@ background = pygame.image.load(TRACK_FILENAME)
 players: dict[str, Player] = {}  # List of all players
 
 playerNum = 0
-playerId = ''
+playerId = None
 phase = 1  # 1:  3... 2... 1... waiting for player phase; 2: game phase; 3: post-game phase
 
 
@@ -59,6 +59,7 @@ def create_players(data: dict):
                 id=key,
                 playerId=playerId)
             player = Player(key, pygame.sprite.Group(), vessel, num)
+        vessel.playerId = playerId
         player.score = playerData['score']
         vessel.rect.x = playerData['x']
         vessel.rect.y = playerData['y']
@@ -119,7 +120,7 @@ def create_stars():
 # Main loop
 
 running = True
-
+winner = None
 
 startTime = None
 currentTime = time.time()
@@ -132,7 +133,8 @@ def start(data):
     allProjectileSprites.empty()
     allVehicleSprites.empty()
     players = {}
-    playerId = sio.get_sid()
+    playerId = data['id']
+    
     create_stars()
 
     players_data = data['players']
@@ -143,6 +145,13 @@ def start(data):
     
     phase = 2
     print('More than 2 players connected, ready to go')
+
+@sio.on('race_over')
+def race_over(data):
+    global winner, phase
+    winner = data['winner']
+    phase = 3
+
 
 
 
@@ -172,14 +181,16 @@ while running:
         raceTimer = display_font_3.render(str(int(RACE_DURATION + startTime - currentTime)), True, YELLOW)
         text_rect = raceTimer.get_rect(center=(WINDOW_WIDTH / 2, 30))
         window.blit(raceTimer, text_rect)
-    elif phase == 3:  # Post-game phase
+    elif phase == 3 and winner:  # Post-game phase
+        winner_player = players[winner['id']]
+        winner_score = winner['score']
         pygame.draw.rect(window, BLACK, pygame.Rect(0, 0, WINDOW_WIDTH, TOP_BANNER_HEIGHT))
         raceTimer = display_font_3.render('0', True, YELLOW)
         text_rect = raceTimer.get_rect(center=(WINDOW_WIDTH / 2, 30))
         window.blit(raceTimer, text_rect)
-        winner = display_font_2.render('Player ' + str(playerNum + 1) + ' wins!', True, YELLOW)
-        text_rect = winner.get_rect(center=(WINDOW_WIDTH / 2, 0.35 * WINDOW_HEIGHT))
-        window.blit(winner, text_rect)
+        winnerText = display_font_2.render('Player ' + winner_player.playerNum + ' wins!', True, player.color)
+        text_rect = winnerText.get_rect(center=(WINDOW_WIDTH / 2, 0.35 * WINDOW_HEIGHT))
+        window.blit(winnerText, text_rect)
 
     if phase == 2:
         # Update all projectile sprites
@@ -235,7 +246,7 @@ while running:
 
     
 
-    if phase == 2 and RACE_DURATION + startTime - currentTime <= 1.0:  # Exit loop when countdown is over
+    if phase == 2 and winner and RACE_DURATION + startTime - currentTime <= 1.0:  # Exit loop when countdown is over
         # phase = 3
         for key, player in players.items():  # Force all vehicles to slow down and stop
             for vehicle in player.vehicleGroup:

@@ -86,7 +86,8 @@ async def connect(sid, environ):
     if len(players) > 1 and not ticker_started:
         ticker_started = True
         race_start_time = time.time()
-        await ws.emit('start', {"players": players, "startTime": time.time()})
+        for id in players.keys():
+            await ws.emit('start', {"players": players, "startTime": time.time(), "id": id}, to=id)
         if ticker_task is None or ticker_task.done():
             print('Creating Lobby...')
             ticker_task = asyncio.create_task(ticker())
