@@ -17,7 +17,7 @@ PLAYER1_COL = (255, 87, 12)  # Used for player 1 progress bar
 PLAYER2_COL = (0, 169, 252)  # Used for player 2 progress bar
 
 # Constants
-TRACK_NUM = 0  # 0 through 2
+TRACK_NUM = 2  # 0 through 2
 FPS = 30  # Frame rate of the game (frames per second)
 N_STARS = 1000
 N_ROCKETS = 5  # Number of rockets per player
