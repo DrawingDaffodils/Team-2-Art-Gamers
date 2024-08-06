@@ -2,7 +2,10 @@ import time
 from aiohttp import web
 from constants import *  # Ensure constants are correctly defined
 import socketio
+import random
+from objects import track
 import asyncio
+from uuid import uuid4
 
 # Create websocket server
 ws = socketio.AsyncServer()
@@ -14,10 +17,159 @@ ws.attach(app)
 
 players = {}
 tick_count = 0
-tick_interval = 24  # Number of ticks per second (adjust as needed)
+tick_interval = 24 # Number of ticks per second (adjust as needed)
 ticker_started = False
 ticker_task = None
 race_start_time = None
+
+
+def update_vehicle_state(vehicle):
+    # Extracting vehicle attributes
+    speed = vehicle['speed']
+    ksi = vehicle['ksi']
+    lat = vehicle['lat']
+    seg = vehicle['seg']
+    lap = vehicle['lap']
+    distance = vehicle['distance']
+    speedUpdate = vehicle['speedUpdate']
+    latUpdate = vehicle['latUpdate']
+    
+    # Temporary state for computations
+    temp_speed = speed
+    temp_ksi = ksi
+    temp_lat = lat
+    temp_seg = seg
+    temp_lap = lap
+    temp_distance = distance
+
+    # Update speed
+    if speedUpdate[4] == 0:  # Not being forced to stop
+        if speedUpdate[0] == 0:  # Speed is not being updated
+            if random.random() < VEHICLE_SPEED_PARAMS[1]:
+                startSpeed = temp_speed
+                endSpeed = random.uniform(VEHICLE_SPEED_PARAMS[2], VEHICLE_SPEED_PARAMS[3]) * VEHICLE_SPEED_PARAMS[0]
+                accelRatio = random.uniform(VEHICLE_SPEED_PARAMS[4], VEHICLE_SPEED_PARAMS[5])
+                speedUpdate = [1, startSpeed, endSpeed, accelRatio, 0]
+        if speedUpdate[0] == 1:  # Speed is being updated
+            temp_speed += speedUpdate[3] * (speedUpdate[2] - speedUpdate[1])
+            if ((speedUpdate[2] - speedUpdate[1] >= 0) and (temp_speed >= speedUpdate[2])) or ((speedUpdate[2] - speedUpdate[1] < 0) and (temp_speed <= speedUpdate[2])):
+                temp_speed = speedUpdate[2]
+                speedUpdate = [0, 0, 0, 0, 0]
+    else:  # Being forced to stop
+        temp_speed += speedUpdate[3] * (speedUpdate[2] - speedUpdate[1])
+        if temp_speed <= speedUpdate[2]:
+            temp_speed = 0.0
+
+    # Update lateral position
+    if speedUpdate[4] == 0:  # Not being forced to stop
+        if latUpdate[0] == 0:  # Lateral position not being updated
+            if random.random() < VEHICLE_LAT_PARAMS[1]:
+                startLat = temp_lat
+                endLat = random.uniform(-VEHICLE_LAT_PARAMS[0], VEHICLE_LAT_PARAMS[0])
+                accelRatio = random.uniform(VEHICLE_LAT_PARAMS[2], VEHICLE_LAT_PARAMS[3])
+                latUpdate = [1, startLat, endLat, accelRatio]
+        if latUpdate[0] == 1:  # Lateral position being updated
+            temp_lat += latUpdate[3] * (latUpdate[2] - latUpdate[1])
+            if ((latUpdate[2] - latUpdate[1] >= 0) and (temp_lat >= latUpdate[2])) or (latUpdate[2] - latUpdate[1] < 0) and (temp_lat <= latUpdate[2]):
+                temp_lat = latUpdate[2]
+                latUpdate = [0, 0, 0, 0]
+
+    # Update position on the track
+    distanceToCover = temp_speed
+    if track.segTypes[temp_seg] == 2:  # If the segment is an arc
+        segPlusOne = (temp_seg + 1) % track.nSeg  # Next segment
+        trackWidth = track.transPoints[temp_seg][2] + temp_ksi * (track.transPoints[segPlusOne][2] - track.transPoints[temp_seg][2])  # Track width
+        distanceToCover = distanceToCover * track.arcData[temp_seg][2] / (track.arcData[temp_seg][2] - track.arcOrient[temp_seg] * temp_lat * trackWidth / 2)
+    while distanceToCover > 0:
+        newKsi = temp_ksi + distanceToCover / track.segLen[temp_seg]
+        if newKsi < 1:  # Still in the same segment
+            if (temp_seg == 0 and temp_ksi < track.startKsi and newKsi >= track.startKsi):  # Update lap number
+                temp_lap += 1
+            temp_ksi = newKsi
+            newCoords = natToGlobal(track, temp_seg, temp_ksi, temp_lat)
+            temp_dir = newCoords[2]
+            distanceToCover = 0
+        else:  # Moving to the next segment
+            distanceToCover -= track.segLen[temp_seg] * (1 - temp_ksi)
+            temp_seg = (temp_seg + 1) % track.nSeg
+            temp_ksi = 0.0
+
+    # Calculate distance covered
+    if temp_lap >= 1 and speedUpdate[4] == 0:
+        temp_distance = (temp_lap - 1) * track.trackLen - TRACK_KSI * track.segLen[0] + temp_ksi * track.segLen[temp_seg]
+        for iSeg in range(temp_seg):
+            temp_distance += track.segLen[iSeg]
+        if temp_seg == 0 and temp_ksi < TRACK_KSI:
+            temp_distance += track.trackLen
+
+    # Update the vehicle state
+    vehicle.update({
+        'seg': temp_seg,
+        'ksi': temp_ksi,
+        'lat': temp_lat,
+        'speed': temp_speed,
+        'dir': temp_dir,
+        'distance': temp_distance,
+        'lap': temp_lap,
+        'x': newCoords[0],
+        'y': newCoords[1]
+    })
+
+
+    return vehicle
+
+
+def create_vehicles():
+    global players
+
+    player_ids = list(players.keys())
+    num_players = len(player_ids)
+
+    # Default spacing values
+    spacing = TRACK_STARTING_GRID[2]
+    vehicles_per_row = TRACK_STARTING_GRID[0]
+
+    # Create a list of vehicles for processing
+    vehicles_to_create = N_VEHICLES * num_players
+
+    ksi = track.startKsi - TRACK_STARTING_GRID[1]
+    lat = 0
+    if vehicles_per_row > 1:
+        lat = -VEHICLE_LAT_PARAMS[0]
+
+    for i in range(vehicles_to_create):
+        player_id = player_ids[i % num_players]
+        player = players[player_id]
+
+        if len(player['vehicles']) >= N_VEHICLES:
+            # Skip creating vehicles for this player if already has the maximum number
+            continue
+
+        # Default lateral positions and ksi
+        id = uuid4().hex
+        vehicle = {
+            "id": id,
+            "lat": lat,
+            "ksi": ksi,
+            "speedUpdate": VESSEL_SPEED_UPDATE,
+            "speed": 0,
+            "seg": 0,
+            "lap": 0,
+            "distance": 0,
+            "latUpdate": [0, 0, 0, 0]
+        }
+
+        # Update ksi for the next vehicle
+        ksi -= spacing
+        if vehicles_per_row > 1:
+            # Distribute vehicles evenly across rows
+            row_index = i % vehicles_per_row
+            lat = -VEHICLE_LAT_PARAMS[0] + (2 * row_index / (vehicles_per_row - 1)) * VEHICLE_LAT_PARAMS[0]
+
+        players[player_id]['vehicles'][id] = vehicle
+
+        # Optional: Additional setup for each vehicle, if needed
+        # For example, adding vehicles to a sprite group or handling player-specific initialization
 
 async def ticker():
     print('Ticker started')
@@ -42,9 +194,15 @@ async def ticker():
                 race_start_time = None
                 ticker_started = False
                 continue
+        
+        for id, player in players.items():
+            for key, vehicle in player['vehicles'].items():
+                ''
+                # players[id]['vehicles'][vehicle['id']] = update_vehicle_state(vehicle)
 
         # Send player data to all clients
         await ws.emit('player_data', players)
+
 
 @ws.on('update')
 async def update(sid, data):
@@ -64,6 +222,20 @@ async def update(sid, data):
 
 
         del data['fruit'] # Deletes the fruit from dictionary
+    
+    if 'vehicle' in data:
+        vehicleId = data['vehicle']['id']
+
+
+        if 'kill' in data['vehicle']: # If data['vehicle'] == {} and player['vehicles] != []
+            if vehicleId in players[sid]['vehicles']:
+                del players[sid]['vehicles'][vehicleId] # Removes the vehicle
+        else:
+            players[sid]['vehicles'][vehicleId] = data['vehicle']
+
+
+        del data['vehicle'] # Deletes the vehicle from dictionary
+  
   
     players[sid].update(data)
 
@@ -80,13 +252,16 @@ async def connect(sid, environ):
         "id": sid,
         "score": 0,
         "x": x, "y": y, "dir": 0,
-        "fruits": {}
+        "color": random.choice(PLAYER_COLS),
+        "fruits": {},
+        "vehicles": {}
     }
     
     if len(players) > 1 and not ticker_started:
         ticker_started = True
         race_start_time = time.time()
         for id in players.keys():
+            create_vehicles()
             await ws.emit('start', {"players": players, "startTime": time.time(), "id": id}, to=id)
         if ticker_task is None or ticker_task.done():
             print('Creating Lobby...')

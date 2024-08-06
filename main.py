@@ -36,81 +36,131 @@ def player_data(data):
 
 
 def fruit_exists(id: str) -> bool:
-    for fruit in allProjectileSprites:
+    for fruit in fruitGroup:
         if fruit.id == id:
             return True
     return False
 
+def all_vehicles() -> list[Vehicle]:
+    vehicles = []
+    for player in players.values():
+        for vehicle in player.vehicleGroup:
+            vehicles.append(vehicle)
+    return vehicles
+        
+
+
+def find_vehicle(id: str, group = vesselGroup) -> Vehicle | None:
+    for vehicle in group:
+        # print('Vehicle Id', vehicle.id, 'Ours', id)
+        if vehicle.id == id:
+            return vehicle
+    return None
+
+def cleanup_objects():
+    # Remove old fruits
+    current_fruit_ids = {fruit.id for fruit in fruitGroup}
+    for fruit in list(fruitGroup):
+        if fruit.id not in current_fruit_ids:
+            fruitGroup.remove(fruit)
+
+    # Remove old vessels
+    current_vessel_ids = {vessel.id for vessel in vesselGroup}
+    for vessel in list(vesselGroup):
+        if vessel.id not in current_vessel_ids:
+            vesselGroup.remove(vessel)
+
+    # Remove old vehicles
+    for player in players.values():
+        current_vehicle_ids = {v.id for v in player.vehicleGroup}
+        for vehicle in list(player.vehicleGroup):
+            if vehicle.id not in current_vehicle_ids:
+                player.vehicleGroup.remove(vehicle)
+
+
+
 def create_players(data: dict):
-    global players, playerNumm
+    global players, playerNum
+
+    # Track existing player and vehicle IDs
+    existing_player_keys = set(players.keys())
+    current_fruit_ids = set(fruit.id for fruit in fruitGroup)
+    
+    # Loop through incoming data
     for key, playerData in data.items():
         num = playerData['playerNum']
-        if key is playerId:
+
+        if key == playerId:
             playerNum = num
-        # Check is player & vessel already exists, If they dont, create them.
-        if key in players.keys(): # If player exists just use the already made one
+
+        # If player exists, update it
+        if key in existing_player_keys:
             player = players[key]
             vessel = player.vessel
-            
-        else: # if it doesnt, create them.  
+        else:
+            # Create new player and vessel
             vessel = Vessel(
-                VESSEL_FILENAMES[num], 
-                initPosition=[playerData['x'], playerData['y']], 
+                VESSEL_FILENAMES[num],
+                initPosition=[playerData['x'], playerData['y']],
                 id=key,
-                playerId=playerId)
-            player = Player(key, pygame.sprite.Group(), vessel, num)
+                playerId=playerId
+            )
+            player = Player(key, pygame.sprite.Group(), vessel, num, color=playerData['color'])
+            vesselGroup.add(vessel)
+            players[key] = player
+
+        # Update vessel and player information
         vessel.playerId = playerId
         player.score = playerData['score']
         vessel.rect.x = playerData['x']
         vessel.rect.y = playerData['y']
-        
         vessel.dir = playerData['dir']
-        
-        
-        
-        players[key] = player
-        if 'fruits' in playerData and playerData['fruits']:
-            for id, fruitData in playerData['fruits'].items():
-                if fruitData and not fruit_exists(id):
-                    
-                    initPosition = fruitData['initPosition']
-                    initDir = fruitData['initDir']
-                    fruitType = fruitData['type']
-                    fruit = Fruit(initPosition, initDir, fruitType, id)
-                    allProjectileSprites.add(fruit)
 
-# Create vehicles for each player and add to groups
- # Randomly picks player in first place on starting grid
-def create_vehicles():
-    global players   
-    ksi = track1.startKsi - TRACK_STARTING_GRID[1]
-    if TRACK_STARTING_GRID[0] == 1:  # If only one row of vehicles
-        lat = 0
-    else:
-        lat = -VEHICLE_LAT_PARAMS[0]
-    i_lat = 1  # Index for lateral position
-    speedUpdate = [1, 0.00, VEHICLE_SPEED_PARAMS[0], VEHICLE_SPEED_PARAMS[5], 0] # Makes the vehicle accelerate to target speed from 0 speed
-    for id, player in players.items():
-        print(player)
-        player = players[id]
-        # Only create vehicles if that player doesnt have any
-        if len(player.vehicleGroup) != 0:
-            pass
+        # Handle fruits
+        for id, fruitData in playerData.get('fruits', {}).items():
+            if id not in current_fruit_ids:
+                fruit = Fruit(
+                    fruitData['initPosition'],
+                    fruitData['initDir'],
+                    fruitData['type'],
+                    id
+                )
+                fruitGroup.add(fruit)
+                current_fruit_ids.add(id)
 
-        for i in range(N_VEHICLES):
-            vehicle = Vehicle(VEHICLE_FILENAMES[player.playerNum], id, ksi, lat, speedUpdate)
-            player.vehicleGroup.add(vehicle)  # Add vehicle to vehicle group of appropriate player
-            allVehicleSprites.add(vehicle)  # Add vehicle to group of all vehicle sprites
-            ksi -= TRACK_STARTING_GRID[2]
-            if TRACK_STARTING_GRID[0] == 1:  # If only one row of vehicles
-                lat = 0
+        # Handle vehicles
+        existing_vehicle_ids = {v.id for v in player.vehicleGroup}
+        
+        for vehicleData in playerData.get('vehicles', {}).values():
+            id = vehicleData['id']
+            if id in existing_vehicle_ids:
+                # Update existing vehicle
+                vehicle = next(v for v in player.vehicleGroup if v.id == id)
+                vehicle.external_update(vehicleData)
+                # print(f'Updated vehicle {id} for player {key}')
             else:
-                i_lat = i_lat % TRACK_STARTING_GRID[0] + 1
-                lat = -VEHICLE_LAT_PARAMS[0] + 2 * (i_lat - 1)/(TRACK_STARTING_GRID[0] - 1) * VEHICLE_LAT_PARAMS[0]
-        allVehicleSprites.add(player.vessel)  # Add vessel to group of all vehicle sprites
-        # playerNum = 1 - playerNum  # Switch player
+                # Create new vehicle if allowed
+                if len(player.vehicleGroup) < N_VEHICLES:
+                    vehicle = Vehicle(
+                        VEHICLE_FILENAMES[player.playerNum],
+                        key,
+                        vehicleData['ksi'],
+                        vehicleData['lat'],
+                        vehicleData.get('speedUpdate', VESSEL_SPEED_UPDATE),
+                        id=id,
+                        playingId=playerId
+                    )
+                    player.vehicleGroup.add(vehicle)
+                    print(f'Added vehicle {id} for player {key}')
+                else:
+                    print(f'Cannot add vehicle {id} for player {key}: max vehicles reached')
 
-
+        # Remove vehicles not in the incoming data
+        incoming_vehicle_ids = {v['id'] for v in playerData.get('vehicles', {}).values()}
+        for vehicle in list(player.vehicleGroup):
+            if vehicle.id not in incoming_vehicle_ids:
+                player.vehicleGroup.remove(vehicle)
+                print(f'Removed vehicle {vehicle.id} for player {key}')
 stars = []
 def create_stars():
     global stars
@@ -130,8 +180,8 @@ currentTime = time.time()
 def start(data):
     print('Recieved start')
     global startTime, phase, players, playerId
-    allProjectileSprites.empty()
-    allVehicleSprites.empty()
+    fruitGroup.empty()
+    vesselGroup.empty()
     players = {}
     playerId = data['id']
     
@@ -139,7 +189,7 @@ def start(data):
 
     players_data = data['players']
     create_players(players_data)
-    create_vehicles()
+    # create_vehicles()
     startTime = data['startTime']
     
     
@@ -157,23 +207,30 @@ def race_over(data):
 
 sio.connect(SOCKETIO_URL) # Connects the websocket client to server.py
 while running:
-    pygame.draw.rect(window, BLACK, pygame.Rect(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT))
-    window.blit(background, background.get_rect())
+    # Handle events
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
             sio.disconnect()
 
+    # Clear the screen
+    window.fill(BLACK)
+    
+    # Draw background
+    window.blit(background, background.get_rect())
+
+    # Update time
+    currentTime = time.time()
+    
     # Update and draw stars
     for star in stars:
         star.update()
         star.draw(window)
 
     if phase == 1:  # Waiting phase
-        countdown = display_font_2.render('Waiting for more players to join...', True, WHITE)
-        text_rect = countdown.get_rect(center=(WINDOW_WIDTH / 2, 0.35 * WINDOW_HEIGHT))
-        # print('Waiting for more players...')
-        window.blit(countdown, text_rect)
+        text = display_font_2.render('Waiting for more players to join...', True, WHITE)
+        text_rect = text.get_rect(center=(WINDOW_WIDTH / 2, 0.35 * WINDOW_HEIGHT))
+        window.blit(text, text_rect)
         
     elif phase == 2:  # Race phase
         pygame.draw.rect(window, BLACK, pygame.Rect(0, 0, WINDOW_WIDTH, TOP_BANNER_HEIGHT))
@@ -181,76 +238,54 @@ while running:
         raceTimer = display_font_3.render(str(int(RACE_DURATION + startTime - currentTime)), True, YELLOW)
         text_rect = raceTimer.get_rect(center=(WINDOW_WIDTH / 2, 30))
         window.blit(raceTimer, text_rect)
+
     elif phase == 3 and winner:  # Post-game phase
-        winner_player = players[winner['id']]
-        winner_score = winner['score']
         pygame.draw.rect(window, BLACK, pygame.Rect(0, 0, WINDOW_WIDTH, TOP_BANNER_HEIGHT))
         raceTimer = display_font_3.render('0', True, YELLOW)
         text_rect = raceTimer.get_rect(center=(WINDOW_WIDTH / 2, 30))
         window.blit(raceTimer, text_rect)
-        winnerText = display_font_2.render('Player ' + str(winner_player.playerNum) + ' wins!', True, player.color)
+        winner_player = players[winner['id']]
+        winnerText = display_font_2.render('Player ' + str(winner_player.playerNum) + ' wins!', True, winner_player.color)
         text_rect = winnerText.get_rect(center=(WINDOW_WIDTH / 2, 0.35 * WINDOW_HEIGHT))
         window.blit(winnerText, text_rect)
 
-    if phase == 2:
-        # Update all projectile sprites
-        allVehicleSprites.update()
-
     if phase >= 2:
-        # Update all vehicle sprites
-        allProjectileSprites.update()
+        # Update all sprites
+        fruitGroup.update()
+        vesselGroup.update()
+        for player in players.values():
+            player.vehicleGroup.update()
         
-        # Update score of all players
-        for key, player in players.items():
-            player.updateScore()
+        # Draw all sprites
+        fruitGroup.draw(window)
+        vesselGroup.draw(window)
+        for player in players.values():
+            player.vehicleGroup.draw(window)
 
-        # Display progress bar for each player
+        # Update and draw progress bars
         for key, player in players.items():
             playerNum = player.playerNum
             name = 'Player ' + str(playerNum)
             bar, bar_im, bar_pos = player.createProgressBar()
-
-            # Define positions for each corner
-            positions = [(5, 5), (window.get_width() - bar.get_width() - 5, 5),
-                        (5, window.get_height() - bar.get_height() - 5), 
-                        (window.get_width() - bar.get_width() - 5, 
-                        window.get_height() - bar.get_height() - 5)]
-
-            # Set the position based on playerNum
+            positions = [
+                (5, 5), 
+                (window.get_width() - bar.get_width() - 5, 5),
+                (5, window.get_height() - bar.get_height() - 5), 
+                (window.get_width() - bar.get_width() - 5, window.get_height() - bar.get_height() - 5)
+            ]
             window.blit(bar, positions[playerNum])
-            bar_pos.x = player.score / track1.maxRaceLength * PROGRESS_BAR_SIZE[0]
+            bar_pos.x = player.score / track.maxRaceLength * PROGRESS_BAR_SIZE[0]
             lap = ' lap' if player.score <= 1.0 else ' laps'
             playerProgress = 'Player ' + name + ': ' + str("{:.2f}".format(player.score)) + lap
-            window.blit(display_font_4.render(playerProgress, True, player.color), (5, 15))
-
-        
-        # Display information about position of vehicles from each player
-        # if DISPLAY_DEBUG == 1:
-        #     y_displ = 2
-        #     for key, player in players.items():
-        #         vehicleGroup = player.vehicleGroup
-        #         for vehicle in vehicleGroup:
-        #             vehicleInfo = 'Player ' + str(player.playerNum + 1) + ', Lap: ' + str(vehicle.lap) + ', Speed: ' + str(round(vehicle.speed, 2)) + 'px/frame, Segment: ' + str(vehicle.seg) + ', ksi: ' + str(round(vehicle.ksi, 2)) + ', lat: ' + str(round(vehicle.lat, 2)) + ', angle: ' + str(round(-vehicle.dir * 180 / math.pi, 1)) + 'deg, Distance: ' + str(round(vehicle.distance, 2)) + ', Score: ' + str(round(player.score, 2))
-        #             window.blit(display_font_1.render(vehicleInfo, True, YELLOW), (2, y_displ))
-        #             y_displ += 14
-
-    # Draw sprites and update display
-    allProjectileSprites.draw(window)
-    allVehicleSprites.draw(window)
-    pygame.display.update()
-    clock.tick(FPS)
-    pygame.display.flip()
-
-    # Update current time
-    currentTime = time.time()
-
+            window.blit(display_font_4.render(playerProgress, True, player.color), positions[playerNum])
     
+    # Refresh display
+    pygame.display.flip()
+    clock.tick(FPS)
 
-    if phase == 2 and winner and RACE_DURATION + startTime - currentTime <= 1.0:  # Exit loop when countdown is over
-        # phase = 3
-        for key, player in players.items():  # Force all vehicles to slow down and stop
+    if phase == 2 and winner and RACE_DURATION + startTime - currentTime <= 1.0:
+        for player in players.values():
             for vehicle in player.vehicleGroup:
                 vehicle.speedUpdate = [0, vehicle.speed, 0.0, VEHICLE_SPEED_PARAMS[5], 1]
-        # playerNum = 0 if players[0].score > players[1].score else 1  # Determine the winning player
 
 pygame.quit()

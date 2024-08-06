@@ -1,7 +1,7 @@
 import pygame
 from PIL import Image
 import socketio  # Used to get width and height of the window
-
+import math
 # Colors
 WHITE = (255, 255, 255)
 GRAY = (100, 100, 100)
@@ -57,6 +57,8 @@ VEHICLE_LAT_PARAMS = [0.5, 0.08, 0.01, 0.03]
 
 # Vessel definition
 VESSEL_FILENAMES = ['Vessel01.png', 'Vessel02.png']
+
+VESSEL_SPEED_UPDATE = [1, 0.00, VEHICLE_SPEED_PARAMS[0], VEHICLE_SPEED_PARAMS[5], 0]
 
 # 0: Initial position of the first vessel along x (in % of the window width)
 # 1: Initial position of the first vessel along y (in % of the window height)
@@ -162,13 +164,39 @@ elif TRACK_NUM == 2:  # Track #2
     TRACK_ANGLES = [0.000, 0.000, 1.571, 1.571, 3.142, 3.142, 1.571, 1.571, 0.000, 0.000, 1.571, 1.571, 3.142, 3.142, -1.571, -1.571, 3.142, 3.142, 1.571, 1.571, 3.142, 3.142, -1.845, -1.845]  # Start angles for each segment (rad)
     TRACK_ARC_ORIENT = [0, 1, 0, 1, 0, -1, 0, -1, 0, 1, 0, 1, 0, 1, 0, -1, 0, -1, 0, 1, 0, 1, 0, 1]  # Orientation of arc segments: +1 if CCW, -1 if CW when y-axis is pointing upward
     TRACK_KSI = 0.77  # ksi at start/finish line (on first segment, assumed straight, and not near the very end of the straight to help with the lap counter)
-    TRACK_STARTING_GRID = [3, 0.07, 0.07]  # Number of vehicles next to one another on starting grid, ksi offset behind finish line for first vehicle, and ksi value between each vehicle
+    TRACK_STARTING_GRID = [4, 0.07, 0.07]  # Number of vehicles next to one another on starting grid, ksi offset behind finish line for first vehicle, and ksi value between each vehicle
     # TRACK_STARTING_GRID = [3, 0.07, 0.00]
 
 TRACK_IMG = Image.open(TRACK_FILENAME)
 WINDOW_WIDTH = TRACK_IMG.width  # 1280
 WINDOW_HEIGHT = TRACK_IMG.height  # 720
-SOCKETIO_URL = "http://bsredu.space:9000"
+SOCKETIO_URL = "http://localhost:8080"
 
 # Create Websocket client
 sio = socketio.Client()
+
+
+
+def natToGlobal(track, seg, ksi, lat):  # Calculates global coords (x, y, theta) from natural coords (seg, ksi, lat)
+    segPlusOne = (seg + 1) % track.nSeg  # Index of next segment
+    trackWidth = track.transPoints[seg][2] + ksi * (track.transPoints[segPlusOne][2] - track.transPoints[seg][2])  # Track width
+    if track.segTypes[seg] == 1:  # If the segment is a straight line
+        theta = track.angles[seg]
+        x = track.transPoints[seg][0] + ksi * (track.transPoints[segPlusOne][0] - track.transPoints[seg][0]) - lat * trackWidth/2 * math.sin(theta)
+        y = track.transPoints[seg][1] + ksi * (track.transPoints[segPlusOne][1] - track.transPoints[seg][1]) + lat * trackWidth/2 * math.cos(theta)
+    else:  # If the segment is an arc
+        startAngle = track.angles[seg]
+        endAngle = track.angles[segPlusOne]
+        if track.arcOrient[seg] == 1:
+            if endAngle < startAngle:  # If the segment is CCW and the end angle is smaller than the start angle
+                endAngle += 2 * math.pi
+            theta = startAngle + ksi * (endAngle - startAngle)
+            x = track.arcData[seg][0] + track.arcData[seg][2] * math.cos(theta - math.pi / 2) - lat * trackWidth/2 * math.sin(theta)
+            y = track.arcData[seg][1] + track.arcData[seg][2] * math.sin(theta - math.pi / 2) + lat * trackWidth/2 * math.cos(theta)
+        if track.arcOrient[seg] == -1:
+            if endAngle > startAngle:  # If the segment is CW and the end angle is larger than the start angle
+                endAngle -= 2 * math.pi
+            theta = startAngle + ksi * (endAngle - startAngle)
+            x = track.arcData[seg][0] + track.arcData[seg][2] * math.cos(theta + math.pi / 2) - lat * trackWidth/2 * math.sin(theta)
+            y = track.arcData[seg][1] + track.arcData[seg][2] * math.sin(theta + math.pi / 2) + lat * trackWidth/2 * math.cos(theta)
+    return [x, y, theta]
