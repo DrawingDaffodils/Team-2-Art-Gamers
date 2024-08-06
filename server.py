@@ -357,4 +357,4 @@ if __name__ == '__main__':
     # Start websocket server
     app.on_shutdown.append(cleanup_background_tasks)
     # app.on_startup.append(start_background_tasks)
-    web.run_app(app)
+    web.run_app(app, port=9000)
