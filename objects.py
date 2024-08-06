@@ -69,107 +69,6 @@ class Vehicle(pygame.sprite.Sprite):
         self.lap = 0  # Lap number
         self.distance = 0  # Distance covered
 
-    # def update(self):
-    #     if(self.playingId != self.playerId): # Only update the vessel if it belongs to you
-    #         return
-    #     # Initialize actions dictionary
-    #     actions = {
-    #         'playerId': self.playerId,
-    #         'seg': self.seg,
-    #         'ksi': self.ksi,
-    #         'lat': self.lat,
-    #         'speed': self.speed,
-    #         'dir': self.dir,
-    #         'distance': self.distance,
-    #         'lap': self.lap
-    #     }
-
-    #     # Temporary state for computations
-    #     temp_speed = self.speed
-    #     temp_ksi = self.ksi
-    #     temp_lat = self.lat
-    #     temp_seg = self.seg
-    #     temp_lap = self.lap
-    #     temp_distance = self.distance
-
-    #     # Update speed
-    #     if self.speedUpdate[4] == 0:  # If not being forced to stop
-    #         if self.speedUpdate[0] == 0:  # Speed is not being updated
-    #             if random.random() < VEHICLE_SPEED_PARAMS[1]:
-    #                 startSpeed = temp_speed
-    #                 endSpeed = random.uniform(VEHICLE_SPEED_PARAMS[2], VEHICLE_SPEED_PARAMS[3]) * VEHICLE_SPEED_PARAMS[0]
-    #                 accelRatio = random.uniform(VEHICLE_SPEED_PARAMS[4], VEHICLE_SPEED_PARAMS[5])
-    #                 self.speedUpdate = [1, startSpeed, endSpeed, accelRatio, 0]
-    #         if self.speedUpdate[0] == 1:  # Speed is being updated
-    #             temp_speed += self.speedUpdate[3] * (self.speedUpdate[2] - self.speedUpdate[1])
-    #             if ((self.speedUpdate[2] - self.speedUpdate[1] >= 0) and (temp_speed >= self.speedUpdate[2])) or ((self.speedUpdate[2] - self.speedUpdate[1] < 0) and (temp_speed <= self.speedUpdate[2])):
-    #                 temp_speed = self.speedUpdate[2]
-    #                 self.speedUpdate = [0, 0, 0, 0, 0]
-    #     else:  # Being forced to stop
-    #         temp_speed += self.speedUpdate[3] * (self.speedUpdate[2] - self.speedUpdate[1])
-    #         if temp_speed <= self.speedUpdate[2]:
-    #             temp_speed = 0.0
-
-    #     # Update lateral position
-    #     if self.speedUpdate[4] == 0:  # If not being forced to stop
-    #         if self.latUpdate[0] == 0:  # Lateral position not being updated
-    #             if random.random() < VEHICLE_LAT_PARAMS[1]:
-    #                 startLat = temp_lat
-    #                 endLat = random.uniform(-VEHICLE_LAT_PARAMS[0], VEHICLE_LAT_PARAMS[0])
-    #                 accelRatio = random.uniform(VEHICLE_LAT_PARAMS[2], VEHICLE_LAT_PARAMS[3])
-    #                 self.latUpdate = [1, startLat, endLat, accelRatio]
-    #         if self.latUpdate[0] == 1:  # Lateral position being updated
-    #             temp_lat += self.latUpdate[3] * (self.latUpdate[2] - self.latUpdate[1])
-    #             if ((self.latUpdate[2] - self.latUpdate[1] >= 0) and (temp_lat >= self.latUpdate[2])) or (self.latUpdate[2] - self.latUpdate[1] < 0) and (temp_lat <= self.latUpdate[2]):
-    #                 temp_lat = self.latUpdate[2]
-    #                 self.latUpdate = [0, 0, 0, 0]
-
-    #     # Update position on the track
-    #     distanceToCover = temp_speed
-    #     if track1.segTypes[temp_seg] == 2:  # If the segment is an arc
-    #         segPlusOne = (temp_seg + 1) % track1.nSeg  # Next segment
-    #         trackWidth = track1.transPoints[temp_seg][2] + temp_ksi * (track1.transPoints[segPlusOne][2] - track1.transPoints[temp_seg][2])  # Track width
-    #         distanceToCover = distanceToCover * track1.arcData[temp_seg][2] / (track1.arcData[temp_seg][2] - track1.arcOrient[temp_seg] * temp_lat * trackWidth / 2)
-    #     while distanceToCover > 0:
-    #         newKsi = temp_ksi + distanceToCover / track1.segLen[temp_seg]
-    #         if newKsi < 1:  # Still in the same segment
-    #             if (temp_seg == 0 and temp_ksi < track1.startKsi and newKsi >= track1.startKsi):  # Update lap number
-    #                 temp_lap += 1
-    #             temp_ksi = newKsi
-    #             newCoords = natToGlobal(track1, temp_seg, temp_ksi, temp_lat)
-    #             temp_dir = newCoords[2]
-    #             distanceToCover = 0
-    #         else:  # Moving to the next segment
-    #             distanceToCover -= track1.segLen[temp_seg] * (1 - temp_ksi)
-    #             temp_seg = (temp_seg + 1) % track1.nSeg
-    #             temp_ksi = 0.0
-
-    #     # Calculate distance covered
-    #     if temp_lap >= 1 and self.speedUpdate[4] == 0:
-    #         temp_distance = (temp_lap - 1) * track1.trackLen - TRACK_KSI * track1.segLen[0] + temp_ksi * track1.segLen[temp_seg]
-    #         for iSeg in range(temp_seg):
-    #             temp_distance += track1.segLen[iSeg]
-    #         if temp_seg == 0 and temp_ksi < TRACK_KSI:
-    #             temp_distance += track1.trackLen
-
-    #     # Update actions dictionary
-    #     actions.update({
-    #         'seg': temp_seg,
-    #         'ksi': temp_ksi,
-    #         'lat': temp_lat,
-    #         'speed': temp_speed,
-    #         'dir': temp_dir,
-    #         'distance': temp_distance,
-    #         'lap': temp_lap,
-    #         'x': newCoords[0],
-    #         'y': newCoords[1],
-    #         'id': self.id
-    #     })
-
-    #     # Send data to server
-    #     if sio.connected:  # Only send messages if connected
-    #         sio.emit('update', { 'vehicle': actions  })
-
     def external_update(self, data):
         """
         Update vehicle state based on the provided websocket data.
@@ -286,7 +185,7 @@ class Player():
     def updateScore(self):
         score = 0.00
         for vehicle in self.vehicleGroup:
-            score += vehicle.distance / track.trackLen
+            score += vehicle.lap
         score /=  N_VEHICLES
         if sio.connected:
             sio.emit('update', {"score": score})

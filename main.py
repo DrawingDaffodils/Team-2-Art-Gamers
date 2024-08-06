@@ -203,6 +203,23 @@ def race_over(data):
     phase = 3
 
 
+def detectCollisions(vehicleGroup: pygame.sprite.Group):
+    collidedVehicles = pygame.sprite.groupcollide(fruitGroup, vehicleGroup, False, False, pygame.sprite.collide_mask)
+    if collidedVehicles:  # If fruits hit some Rockets
+        for fruit, _vehicle in collidedVehicles.items():
+            vehicle: Vehicle = _vehicle[0]
+            if vehicle.playingId == playerId:
+                sio.emit('collision', { 'fruit_id': fruit.id, 'vehicle_id': vehicle.id, 'vehicle_owner': vehicle.playerId })
+                fruit.kill()
+            # if rocket_i[0].speedUpdate[4] != 2:  # If the rocket has not yet been hit in the past few seconds
+            #     rocket_i[0].speedUpdate = [1, rocket_i[0].speed, FRUIT_PARAMS[3], ROCKET_SPEED_PARAMS[5], 2]
+            #     rocket_i[0].lastHitTime = time.time()  # Update last time the rocket has been hit
+            #     rocket_i[0].lastBlinkTime = rocket_i[0].lastHitTime
+            #     rocket_i[0].blinkState = 0  # Starts to make the rocket blink
+            #     rocket_i[0].timePenalty = FRUIT_PENALTY[fruit_i.type]  # Define the time penalty
+            #     fruit_i.kill()  # Kill the fruit
+
+
 
 
 sio.connect(SOCKETIO_URL) # Connects the websocket client to server.py
@@ -253,14 +270,16 @@ while running:
         # Update all sprites
         fruitGroup.update()
         vesselGroup.update()
-        for player in players.values():
-            player.vehicleGroup.update()
+
         
         # Draw all sprites
         fruitGroup.draw(window)
         vesselGroup.draw(window)
         for player in players.values():
             player.vehicleGroup.draw(window)
+            detectCollisions(player.vehicleGroup)
+            if player.playerId == playerId:
+                player.updateScore()
 
         # Update and draw progress bars
         for key, player in players.items():

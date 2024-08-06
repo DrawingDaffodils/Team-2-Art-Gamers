@@ -33,6 +33,8 @@ def update_vehicle_state(vehicle):
     distance = vehicle['distance']
     speedUpdate = vehicle['speedUpdate']
     latUpdate = vehicle['latUpdate']
+    lastHit = vehicle.get('lastHit', 0)
+    hit = vehicle.get('hit', False)
     
     # Temporary state for computations
     temp_speed = speed
@@ -40,7 +42,7 @@ def update_vehicle_state(vehicle):
     temp_lat = lat
     temp_seg = seg
     temp_lap = lap
-    temp_distance = distance
+    temp_distance = distance if lap >= 1 else 0
 
     # Update speed
     if speedUpdate[4] == 0:  # Not being forced to stop
@@ -51,14 +53,22 @@ def update_vehicle_state(vehicle):
                 accelRatio = random.uniform(VEHICLE_SPEED_PARAMS[4], VEHICLE_SPEED_PARAMS[5])
                 speedUpdate = [1, startSpeed, endSpeed, accelRatio, 0]
         if speedUpdate[0] == 1:  # Speed is being updated
-            temp_speed += speedUpdate[3] * (speedUpdate[2] - speedUpdate[1])
-            if ((speedUpdate[2] - speedUpdate[1] >= 0) and (temp_speed >= speedUpdate[2])) or ((speedUpdate[2] - speedUpdate[1] < 0) and (temp_speed <= speedUpdate[2])):
-                temp_speed = speedUpdate[2]
-                speedUpdate = [0, 0, 0, 0, 0]
-    else:  # Being forced to stop
+            if time.time() - lastHit >= 5:
+                temp_speed += speedUpdate[3] * (speedUpdate[2] - speedUpdate[1])
+                if ((speedUpdate[2] - speedUpdate[1] >= 0) and (temp_speed >= speedUpdate[2])) or ((speedUpdate[2] - speedUpdate[1] < 0) and (temp_speed <= speedUpdate[2])):
+                    temp_speed = speedUpdate[2]
+                    speedUpdate = [0, 0, 0, 0, 0]
+
+    else:  # being forced to stop
         temp_speed += speedUpdate[3] * (speedUpdate[2] - speedUpdate[1])
         if temp_speed <= speedUpdate[2]:
             temp_speed = 0.0
+
+    # Handle hit
+    if hit:
+        time_since_hit = time.time() - lastHit
+        if time_since_hit < 5:  # 5 seconds after hit
+            temp_speed *= 0.55
 
     # Update lateral position
     if speedUpdate[4] == 0:  # Not being forced to stop
@@ -95,14 +105,13 @@ def update_vehicle_state(vehicle):
             temp_ksi = 0.0
 
     # Calculate distance covered
-    if temp_lap >= 1 and speedUpdate[4] == 0:
-        temp_distance = (temp_lap - 1) * track.trackLen - TRACK_KSI * track.segLen[0] + temp_ksi * track.segLen[temp_seg]
+    if lap >= 1 and speedUpdate[4] == 0:
+        temp_distance += (temp_lap - lap) * track.trackLen - TRACK_KSI * track.segLen[0] + temp_ksi * track.segLen[temp_seg]
         for iSeg in range(temp_seg):
             temp_distance += track.segLen[iSeg]
         if temp_seg == 0 and temp_ksi < TRACK_KSI:
             temp_distance += track.trackLen
 
-    # Update the vehicle state
     vehicle.update({
         'seg': temp_seg,
         'ksi': temp_ksi,
@@ -112,12 +121,11 @@ def update_vehicle_state(vehicle):
         'distance': temp_distance,
         'lap': temp_lap,
         'x': newCoords[0],
-        'y': newCoords[1]
+        'y': newCoords[1],
+        'speedUpdate': speedUpdate,
     })
 
-
     return vehicle
-
 
 def create_vehicles():
     global players
@@ -151,12 +159,14 @@ def create_vehicles():
             "id": id,
             "lat": lat,
             "ksi": ksi,
-            "speedUpdate": VESSEL_SPEED_UPDATE,
+            "speedUpdate": [1, 0.00, random.randint(5, 8), VEHICLE_SPEED_PARAMS[5], 0],
             "speed": 0,
             "seg": 0,
             "lap": 0,
             "distance": 0,
-            "latUpdate": [0, 0, 0, 0]
+            "latUpdate": [0, 0, 0, 0],
+            # "lastHit": None,
+            "hit": False
         }
 
         # Update ksi for the next vehicle
@@ -197,11 +207,13 @@ async def ticker():
         
         for id, player in players.items():
             for key, vehicle in player['vehicles'].items():
-                ''
-                # players[id]['vehicles'][vehicle['id']] = update_vehicle_state(vehicle)
+                players[id]['vehicles'][vehicle['id']] = update_vehicle_state(vehicle)
 
         # Send player data to all clients
         await ws.emit('player_data', players)
+        for player in players.values():
+            # if len(player['fruits']) > 2:
+            player['fruits'] = {}
 
 
 @ws.on('update')
@@ -238,6 +250,20 @@ async def update(sid, data):
   
   
     players[sid].update(data)
+
+@ws.on('collision')
+async def collision(sid, data):
+    print('collision', data)
+    vehicle_id = data['vehicle_id']
+    vehicle_owner = data['vehicle_owner']
+
+    vehicle = players[vehicle_owner]['vehicles'][vehicle_id]
+    # Lower vehicle speed for the next 5 ticks
+    vehicle['lastHit'] = time.time()
+    vehicle['hit'] = True
+    
+
+    players[vehicle_owner]['vehicles'][vehicle_id] = vehicle
 
 @ws.event
 async def connect(sid, environ):
