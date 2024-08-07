@@ -23,3 +23,16 @@ After sucessfully cloning the repo, run `cd Team-2-Art-Gamers`
 Next, change the branch using the following:
 
 `git checkout refactoring`
+
+# Runnning the game:
+
+## running on the Pi server:
+
+Run `python main.py` file
+
+## Running server on your commputer:
+1. Open [constants.pi](constants.pi) and change `SOCKETIO_URL` to `http://localhost:9000`
+
+2. Run `python server.py`
+
+3. Run `python main.py` in two different terminals.
